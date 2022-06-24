@@ -1,0 +1,73 @@
+﻿@page "/"
+
+@using Simple.MPD;
+@using Simple.MPD.Networking;
+
+<PageTitle>Simple MPD</PageTitle>
+
+<h1>@response</h1>
+
+@if (showButtons)
+{
+    <button class="btn btn-primary" @onclick="Prev">Prev</button>
+    <button class="btn btn-primary" @onclick="PlayPause">@playPause</button>
+    <button class="btn btn-primary" @onclick="Next">Next</button>
+}
+
+@code {
+    string response = "Connecting..";
+
+    MPD mpd = default!;
+    bool showButtons = false;
+    string playPause="";
+
+    async Task Next() => await mpd.NextAsync();
+    async Task Prev() => await mpd.PreviousAsync();
+
+    async Task PlayPause()
+    {
+        await mpd.PauseAsync(PauseState.Toggle);
+        await GetPlayStatus();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        mpd = new MPD(new TcpConnection("volumio.local"));
+
+        showButtons = true;
+
+        await GetPlayStatus();
+
+        var timer = new System.Threading.Timer(async _ =>
+        {
+            await GetCurrentSong();
+            await InvokeAsync(StateHasChanged);
+        }, null, 100, 1000);
+
+        async Task GetCurrentSong()
+        {
+            var list = await mpd.GetQueue();
+            response = list.Songs[0].SongDisplayName;
+        }
+    }
+
+    async Task GetPlayStatus()
+    {
+        var status = await mpd.GetStatusAsync();
+
+        switch (status.State)
+        {
+            case PlaybackState.Pause:
+            case PlaybackState.Stop:
+                playPause = "Play";
+                break;
+
+            case PlaybackState.Play:
+                playPause = "Pause";
+                break;
+        }
+    }
+}
